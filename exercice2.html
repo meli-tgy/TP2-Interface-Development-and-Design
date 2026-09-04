@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>TP02 - Exercice 2 : Déplacement du cube</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  </head>
+  <body>
+    <a-scene>
+      <a-plane src="grass.jpg" rotation="-90 0 0" width="50" height="50" repeat="10 10"></a-plane>
+      <a-sky src="sky.jpg" rotation="0 -90 0"></a-sky>
+
+      <a-box id="player" player-controls position="0 0.5 0" width="1" height="1" depth="1" color="#4CC3D9"></a-box>
+
+      
+      <a-camera position="0 5 8" look-controls="enabled: false"></a-camera>
+    </a-scene>
+
+    <script>
+    AFRAME.registerComponent('player-controls', {
+      schema: {
+        speed: {type: 'number', default: 15},
+        acceleration: {type: 'number', default: 20},
+        friction: {type: 'number', default: 5},
+        jumpForce: {type: 'number', default: 6},
+        gravity: {type: 'number', default: -15}
+      },
+
+      init: function () {
+        this.velocity = new THREE.Vector3(0, 0, 0);
+        this.verticalVelocity = 0;
+        this.isGrounded = true;
+        this.keys = {};
+
+        window.addEventListener('keydown', (e) => { this.keys[e.code] = true; });
+        window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
+      },
+
+      tick: function (time, timeDelta) {
+        const dt = timeDelta / 1000;
+        const el = this.el;
+        const data = this.data;
+
+        const inputDir = new THREE.Vector3(0, 0, 0);
+        if (this.keys['KeyW']) inputDir.z -= 1;
+        if (this.keys['KeyS']) inputDir.z += 1;
+        if (this.keys['KeyA']) inputDir.x -= 1;
+        if (this.keys['KeyD']) inputDir.x += 1;
+
+        if (inputDir.length() > 0) inputDir.normalize();
+
+        if (inputDir.length() > 0) {
+          this.velocity.x += inputDir.x * data.acceleration * dt;
+          this.velocity.z += inputDir.z * data.acceleration * dt;
+
+          const horizontalSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.z ** 2);
+          if (horizontalSpeed > data.speed) {
+            const ratio = data.speed / horizontalSpeed;
+            this.velocity.x *= ratio;
+            this.velocity.z *= ratio;
+          }
+        } else {
+          const decel = data.friction * dt;
+          const currentSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.z ** 2);
+          if (currentSpeed > 0) {
+            const newSpeed = Math.max(0, currentSpeed - decel);
+            const ratio = newSpeed / currentSpeed;
+            this.velocity.x *= ratio;
+            this.velocity.z *= ratio;
+          }
+        }
+
+        if (this.keys['Space'] && this.isGrounded) {
+          this.verticalVelocity = data.jumpForce;
+          this.isGrounded = false;
+        }
+
+        this.verticalVelocity += data.gravity * dt;
+
+        const pos = el.getAttribute('position');
+        let newY = pos.y + this.verticalVelocity * dt;
+
+        if (newY <= 0.5) {
+          newY = 0.5;
+          this.verticalVelocity = 0;
+          this.isGrounded = true;
+        }
+
+        el.setAttribute('position', {
+          x: pos.x + this.velocity.x * dt,
+          y: newY,
+          z: pos.z + this.velocity.z * dt
+        });
+      }
+    });
+    </script>
+  </body>
+</html>
