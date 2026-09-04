@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>TP02 - Exercice 2 : Déplacement du cube</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  </head>
+  <body>
+    <a-scene>
+      <a-plane src="grass.jpg" rotation="-90 0 0" width="50" height="50" repeat="10 10"></a-plane>
+      <a-sky src="sky.jpg" rotation="0 -90 0"></a-sky>
+
+      <a-box id="player" player-controls position="0 0.5 0" width="1" height="1" depth="1" color="#4CC3D9"></a-box>
+      <a-entity id="cameraRig" orbit-camera="target: #player"></a-entity>
+    
+    </a-scene>
+
+    <script>
+    AFRAME.registerComponent('player-controls', {
+      schema: {
+        speed: {type: 'number', default: 15},
+        acceleration: {type: 'number', default: 20},
+        friction: {type: 'number', default: 15},
+        jumpForce: {type: 'number', default: 6},
+        gravity: {type: 'number', default: -15}
+      },
+
+      init: function () {
+        this.velocity = new THREE.Vector3(0, 0, 0);
+        this.verticalVelocity = 0;
+        this.isGrounded = true;
+        this.keys = {};
+
+        window.addEventListener('keydown', (e) => { this.keys[e.code] = true; });
+        window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
+      },
+
+      tick: function (time, timeDelta) {
+        const dt = timeDelta / 1000;
+        const el = this.el;
+        const data = this.data;
+
+        const inputDir = new THREE.Vector3(0, 0, 0);
+        if (this.keys['KeyW']) inputDir.z += 1;
+        if (this.keys['KeyS']) inputDir.z -= 1;
+        if (this.keys['KeyD']) inputDir.x -= 1;
+        if (this.keys['KeyA']) inputDir.x += 1;
+
+        if (inputDir.length() > 0) inputDir.normalize();
+
+        if (inputDir.length() > 0) {
+          this.velocity.x += inputDir.x * data.acceleration * dt;
+          this.velocity.z += inputDir.z * data.acceleration * dt;
+
+          const horizontalSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.z ** 2);
+          if (horizontalSpeed > data.speed) {
+            const ratio = data.speed / horizontalSpeed;
+            this.velocity.x *= ratio;
+            this.velocity.z *= ratio;
+          }
+        } else {
+          const decel = data.friction * dt;
+          const currentSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.z ** 2);
+          if (currentSpeed > 0) {
+            const newSpeed = Math.max(0, currentSpeed - decel);
+            const ratio = newSpeed / currentSpeed;
+            this.velocity.x *= ratio;
+            this.velocity.z *= ratio;
+          }
+        }
+
+        if (this.keys['Space'] && this.isGrounded) {
+          this.verticalVelocity = data.jumpForce;
+          this.isGrounded = false;
+        }
+
+        this.verticalVelocity += data.gravity * dt;
+
+        const pos = el.getAttribute('position');
+        let newY = pos.y + this.verticalVelocity * dt;
+
+        if (newY <= 0.5) {
+          newY = 0.5;
+          this.verticalVelocity = 0;
+          this.isGrounded = true;
+        }
+
+        el.setAttribute('position', {
+          x: pos.x + this.velocity.x * dt,
+          y: newY,
+          z: pos.z + this.velocity.z * dt
+        });
+      }
+    });
+    AFRAME.registerComponent('orbit-camera', {
+  schema: {
+    target: {type: 'selector'},   // l'élément à suivre (le cube)
+    distance: {type: 'number', default: 8},
+    minDistance: {type: 'number', default: 3},
+    maxDistance: {type: 'number', default: 15},
+    minPhi: {type: 'number', default: 1},   // angle vertical mini (proche du sol)
+    maxPhi: {type: 'number', default: 89}   // angle vertical maxi (quasi au-dessus)
+  },
+
+  init: function () {
+    // Angles actuels (en degrés) et distance
+    this.theta = 0;     // rotation horizontale
+    this.phi = 30;      // rotation verticale (départ légèrement au-dessus)
+    this.currentDistance = this.data.distance;
+
+    this.isDragging = false;
+    this.lastMouseX = 0;
+    this.lastMouseY = 0;
+
+    // On crée la caméra en JS et on l'attache à ce rig
+    this.cameraEl = document.createElement('a-camera');
+    this.cameraEl.setAttribute('look-controls', 'enabled: false');
+    this.el.appendChild(this.cameraEl);
+
+    // Bind pour garder le bon "this" dans les callbacks
+    this.onMouseDown = this.onMouseDown.bind(this);
+    this.onMouseMove = this.onMouseMove.bind(this);
+    this.onMouseUp = this.onMouseUp.bind(this);
+    this.onWheel = this.onWheel.bind(this);
+
+    const canvas = this.el.sceneEl.canvas;
+    canvas.addEventListener('mousedown', this.onMouseDown);
+    window.addEventListener('mousemove', this.onMouseMove);
+    window.addEventListener('mouseup', this.onMouseUp);
+    canvas.addEventListener('wheel', this.onWheel);
+  },
+
+  onMouseDown: function (e) {
+    if (e.button !== 0) return; // uniquement clic gauche
+    this.isDragging = true;
+    this.lastMouseX = e.clientX;
+    this.lastMouseY = e.clientY;
+  },
+
+  onMouseUp: function () {
+    this.isDragging = false;
+  },
+
+  onMouseMove: function (e) {
+    if (!this.isDragging) return;
+
+    const deltaX = e.clientX - this.lastMouseX;
+    const deltaY = e.clientY - this.lastMouseY;
+    this.lastMouseX = e.clientX;
+    this.lastMouseY = e.clientY;
+
+    // Sensibilité 
+    const sensitivity = 0.2;
+    this.theta -= deltaX * sensitivity;
+    this.phi += deltaY * sensitivity;
+
+    this.phi = Math.max(this.data.minPhi, Math.min(this.data.maxPhi, this.phi));
+  },
+
+  onWheel: function (e) {
+    e.preventDefault();
+    this.currentDistance += e.deltaY * 0.01;
+    this.currentDistance = Math.max(
+      this.data.minDistance,
+      Math.min(this.data.maxDistance, this.currentDistance)
+    );
+  },
+
+  tick: function () {
+    if (!this.data.target) return;
+
+    const targetPos = this.data.target.object3D.position;
+
+    const thetaRad = THREE.MathUtils.degToRad(this.theta);
+    const phiRad = THREE.MathUtils.degToRad(this.phi);
+    const desiredX = targetPos.x + this.currentDistance * Math.cos(phiRad) * Math.sin(thetaRad);
+    const desiredY = targetPos.y + this.currentDistance * Math.sin(phiRad);
+    const desiredZ = targetPos.z + this.currentDistance * Math.cos(phiRad) * Math.cos(thetaRad);
+    const smoothing = 0.1; // 0 = immobile, 1 = instantané (comme avant)
+    const camPos = this.el.object3D.position;
+    camPos.x += (desiredX - camPos.x) * smoothing;
+    camPos.y += (desiredY - camPos.y) * smoothing;
+    camPos.z += (desiredZ - camPos.z) * smoothing;
+
+    
+
+    // toujours vers le joueur
+    this.el.object3D.lookAt(targetPos.x, targetPos.y + 0.5, targetPos.z);
+  }
+});
+    </script>
+  </body>
+</html>
