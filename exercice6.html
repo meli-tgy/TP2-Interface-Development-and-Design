@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>TP02 - Caméra Fixe au Loin</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
+
+    <script>
+      AFRAME.registerComponent('player-physics-controller', {
+        schema: {
+          speed: { type: 'number', default: 8 },
+          jumpForce: { type: 'number', default: 10 }
+        },
+
+        init: function () {
+          this.keys = {};
+
+          window.addEventListener('keydown', (e) => { this.keys[e.code] = true; });
+          window.addEventListener('keyup', (e) => { this.keys[e.code] = false; });
+        },
+
+        tick: function () {
+          if (!this.el.body) return;
+
+          let moveX = 0;
+          let moveZ = 0;
+
+          if (this.keys['KeyW']) moveZ -= 1; 
+          if (this.keys['KeyS']) moveZ += 1; 
+          if (this.keys['KeyA']) moveX -= 1;
+          if (this.keys['KeyD']) moveX += 1; 
+
+          if (moveX !== 0 && moveZ !== 0) {
+            moveX *= 0.7071;
+            moveZ *= 0.7071;
+          }
+
+          this.el.body.velocity.x = moveX * this.data.speed;
+          this.el.body.velocity.z = moveZ * this.data.speed;
+
+          const isGrounded = Math.abs(this.el.body.velocity.y) < 0.05 && this.el.body.position.y <= 0.6;
+          if (this.keys['Space'] && isGrounded) {
+            this.el.body.applyImpulse(
+              new CANNON.Vec3(0, this.data.jumpForce, 0),
+              this.el.body.position
+            );
+            this.keys['Space'] = false;
+          }
+
+          this.el.body.angularVelocity.set(0, 0, 0);
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <a-scene physics="gravity: -20; debug: false">
+      <a-assets>
+        <img id="grass" src="grass.jpg">
+        <img id="sky" src="sky.jpg">
+      </a-assets>
+
+      <a-plane src="#grass" rotation="-90 0 0" width="50" height="50" repeat="10 10" static-body></a-plane>
+      <a-sky src="#sky" rotation="0 -90 0"></a-sky>
+
+      <a-box id="player" 
+             position="0 1 0" 
+             material="color: #4CC3D9;" 
+             dynamic-body="mass: 1; shape: box;" 
+             player-physics-controller>
+      </a-box>
+
+      <a-box position="3 0.5 -3" width="1" height="1" depth="1" material="color: #FF3636;" dynamic-body="mass: 0.5; shape: box;"></a-box>
+      <a-box position="-3 0.5 -4" width="1" height="1" depth="1" material="color: #2ECC71;" dynamic-body="mass: 1; shape: box;"></a-box>
+      <a-box position="0 1 -6" width="2" height="2" depth="2" material="color: #F1C40F;" dynamic-body="mass: 5; shape: box;"></a-box>
+      <a-box position="-2 0.5 -2" width="0.8" height="0.8" depth="0.8" material="color: #E67E22;" dynamic-body="mass: 0.5; shape: box;"></a-box>
+      <a-box position="-2 1.5 -2" width="0.8" height="0.8" depth="0.8" material="color: #E67E22;" dynamic-body="mass: 0.5; shape: box;"></a-box>
+
+      <a-camera id="main-camera" 
+                position="0 12 14" 
+                rotation="-35 0 0" 
+                look-controls="enabled: false" 
+                wasd-controls="enabled: false">
+      </a-camera>
+    </a-scene>
+  </body>
+</html>
