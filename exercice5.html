@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>TP02 - Exercice 5 : Déplacement et Saut Fonctionnel</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-physics-system@v4.2.2/dist/aframe-physics-system.min.js"></script>
+
+    <script>
+      AFRAME.registerComponent('player-physics-controller', {
+        schema: {
+          speed: { type: 'number', default: 8 },
+          jumpForce: { type: 'number', default: 10 },
+          minDistance: { type: 'number', default: 2 },
+          maxDistance: { type: 'number', default: 15 }
+        },
+
+        init: function () {
+          this.keys = {};
+          this.player = this.el;
+          this.cameraRig = document.querySelector('#camera-rig');
+          this.camera = document.querySelector('#main-camera');
+
+          this.pitch = 0.6;
+          this.yaw = 0;
+          this.distance = 7;
+
+          this.isMouseDown = false;
+          this.previousMousePosition = { x: 0, y: 0 };
+
+          if (this.el.sceneEl.hasLoaded) {
+            this.updateCameraPosition();
+          } else {
+            this.el.sceneEl.addEventListener('loaded', () => this.updateCameraPosition());
+          }
+
+          window.addEventListener('keydown', (e) => { 
+            this.keys[e.code] = true; 
+          });
+
+          window.addEventListener('keyup', (e) => { 
+            this.keys[e.code] = false; 
+          });
+
+          window.addEventListener('mousedown', (e) => {
+            if (e.button === 0) {
+              this.isMouseDown = true;
+              this.previousMousePosition = { x: e.clientX, y: e.clientY };
+            }
+          });
+
+          window.addEventListener('mouseup', () => { this.isMouseDown = false; });
+
+          window.addEventListener('mousemove', (e) => {
+            if (!this.isMouseDown) return;
+
+            const deltaX = e.clientX - this.previousMousePosition.x;
+            const deltaY = e.clientY - this.previousMousePosition.y;
+
+            this.yaw += deltaX * 0.005;
+            this.pitch -= deltaY * 0.005;
+            this.pitch = Math.max(0.05, Math.min(Math.PI / 2 - 0.05, this.pitch));
+
+            this.previousMousePosition = { x: e.clientX, y: e.clientY };
+          });
+
+          window.addEventListener('wheel', (e) => {
+            this.distance += e.deltaY * 0.005;
+            this.distance = Math.max(this.data.minDistance, Math.min(this.data.maxDistance, this.distance));
+          });
+        },
+
+        updateCameraPosition: function () {
+          if (!this.player || !this.player.object3D || !this.camera || !this.cameraRig) return;
+
+          let playerPos = this.player.object3D.position;
+          this.cameraRig.object3D.position.copy(playerPos);
+
+          const camX = this.distance * Math.sin(this.yaw) * Math.cos(this.pitch);
+          const camY = this.distance * Math.sin(this.pitch);
+          const camZ = this.distance * Math.cos(this.yaw) * Math.cos(this.pitch);
+
+          this.camera.object3D.position.set(camX, camY, camZ);
+          this.camera.object3D.lookAt(0, 0, 0);
+        },
+
+        tick: function () {
+          if (!this.el.body) return;
+
+          let inputDir = new THREE.Vector3(0, 0, 0);
+          if (this.keys['KeyW']) inputDir.z -= 1;
+          if (this.keys['KeyS']) inputDir.z += 1;
+          if (this.keys['KeyA']) inputDir.x -= 1;
+          if (this.keys['KeyD']) inputDir.x += 1;
+
+          if (inputDir.lengthSq() > 0) {
+            inputDir.normalize();
+          }
+
+          let camForward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)).normalize();
+          let camRight = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw)).normalize();
+
+          let targetMoveDir = new THREE.Vector3()
+            .addScaledVector(camRight, inputDir.x)
+            .addScaledVector(camForward, -inputDir.z);
+
+          if (targetMoveDir.lengthSq() > 0) {
+            targetMoveDir.normalize();
+          }
+
+          this.el.body.velocity.x = targetMoveDir.x * this.data.speed;
+          this.el.body.velocity.z = targetMoveDir.z * this.data.speed;
+
+          const isGrounded = Math.abs(this.el.body.velocity.y) < 0.05 && this.el.body.position.y <= 0.6;
+          if (this.keys['Space'] && isGrounded) {
+            this.el.body.applyImpulse(
+              new CANNON.Vec3(0, this.data.jumpForce, 0),
+              this.el.body.position
+            );
+            this.keys['Space'] = false; 
+          }
+
+          this.el.body.angularVelocity.set(0, 0, 0);
+
+          this.updateCameraPosition();
+        }
+      });
+    </script>
+  </head>
+  <body>
+    <a-scene physics="gravity: -20; debug: false">
+      <a-assets>
+        <img id="grass" src="grass.jpg">
+        <img id="sky" src="sky.jpg">
+      </a-assets>
+
+      <a-plane src="#grass" rotation="-90 0 0" width="50" height="50" repeat="10 10" static-body></a-plane>
+      <a-sky src="#sky" rotation="0 -90 0"></a-sky>
+
+      <a-box id="player" 
+             position="0 1 0" 
+             material="color: #4CC3D9;" 
+             dynamic-body="mass: 1; shape: box;" 
+             player-physics-controller>
+      </a-box>
+
+      <a-entity id="camera-rig" position="0 1 0">
+        <a-camera id="main-camera" look-controls="enabled: false" wasd-controls="enabled: false"></a-camera>
+      </a-entity>
+    </a-scene>
+  </body>
+</html>
